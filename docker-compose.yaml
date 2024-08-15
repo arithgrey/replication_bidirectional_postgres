@@ -1,0 +1,45 @@
+version: '3.3'
+
+services:
+  postgres-primary:
+    image: postgres:14
+    container_name: postgres-primary
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: example
+      POSTGRES_DB: mydb
+    volumes:
+      - ./primary_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Solo en el nodo primario
+    ports:
+      - "5432:5432"
+    networks:
+      - postgres-network
+    command: >
+      postgres -c wal_level=logical
+               -c max_wal_senders=5
+               -c max_replication_slots=5
+               -c listen_addresses='*'
+
+  postgres-secondary:
+    image: postgres:14
+    container_name: postgres-secondary
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: example
+    volumes:
+      - ./secondary_data:/var/lib/postgresql/data
+    depends_on:
+      - postgres-primary
+    networks:
+      - postgres-network
+    ports:
+      - "5433:5432"
+    command: >
+      postgres -c wal_level=replica
+               -c hot_standby=on
+               -c primary_conninfo='host=postgres-primary port=5432 user=replicator password=example'
+
+networks:
+  postgres-network:
+    driver: bridge
